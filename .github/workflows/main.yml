@@ -101,11 +101,6 @@ jobs:
           powercfg -change -hibernate-timeout-dc 0 2>$null
           powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null
           
-          # 4. Matiin Windows lock screen via group policy
-          New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -Force -ErrorAction SilentlyContinue | Out-Null
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -Name "DisableLockScreenAppNotifications" -Value 1 -Type DWord -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -Name "EnableFirstLogonAnimation" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-          
           Write-Host "✅ SESSION LOCK & TIMEOUT DISABLED!"
 
       - name: SET RUSTDESK PERMANENT PASSWORD + AUTO CONNECT
@@ -113,7 +108,7 @@ jobs:
           Write-Host "🔥 SETTING RUSTDESK PERMANENT PASSWORD 🔥"
           
           # Kill RustDesk if running
-          Get-Process -Name "rustdesk" -ErrorAction SilentlyContinue | Stop-Process -Force
+          Get-Process -Name "rustdesk" -ErrorAction SilentlyContinue | Stop-Process -Force 2>$null
           Start-Sleep -Seconds 2
           
           # Install RustDesk
@@ -130,50 +125,32 @@ jobs:
             }
           }
           
-          # Run RustDesk
+          # Run RustDesk first time
           Start-Process -FilePath $rdExe
-          Start-Sleep -Seconds 5
+          Start-Sleep -Seconds 10
           
-          # Set permanent password via config file
-          $configDir = "$env:AppData\RustDesk\config"
-          New-Item -Path $configDir -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null
-          
-          # Create config with permanent password
-          $config = @"
-          {
-            "password": "$env:RUSTDESK_PASS",
-            "allow-permanent-password": true,
-            "server-address": "rustdesk.com",
-            "rendezvous-server": "rustdesk.com",
-            "nat-type": 0,
-            "relay-servers": "rustdesk.com"
-          }
-          "@
-          $config | Out-File -FilePath "$configDir\RustDesk2.toml" -Encoding UTF8
-          
-          # Restart RustDesk with permanent password
-          Get-Process -Name "rustdesk" -ErrorAction SilentlyContinue | Stop-Process -Force
+          # Kill it again to apply config
+          Get-Process -Name "rustdesk" -ErrorAction SilentlyContinue | Stop-Process -Force 2>$null
           Start-Sleep -Seconds 2
+          
+          # Set permanent password via command line
           Start-Process -FilePath $rdExe -ArgumentList "--password $env:RUSTDESK_PASS"
           Start-Sleep -Seconds 5
           
-          # Get RustDesk ID
+          # Get RustDesk ID from config
           $rdId = ""
-          try {
-            $configFile = "$env:AppData\RustDesk\config\RustDesk.toml"
-            if (Test-Path $configFile) {
-              $content = Get-Content $configFile -Raw
-              if ($content -match 'id\s*=\s*"(\d+)"') {
-                $rdId = $matches[1]
-              }
+          $configFile = "$env:AppData\RustDesk\config\RustDesk.toml"
+          if (Test-Path $configFile) {
+            $content = Get-Content $configFile -Raw -ErrorAction SilentlyContinue
+            if ($content -match 'id\s*=\s*"(\d+)"') {
+              $rdId = $matches[1]
             }
-          } catch { }
+          }
           
           Write-Host "✅ RUSTDESK CONFIGURED!"
           Write-Host "🔐 RUSTDESK ID: $rdId"
           Write-Host "🔑 RUSTDESK PASSWORD: $env:RUSTDESK_PASS"
           
-          # Save to env
           "RUSTDESK_ID=$rdId" | Out-File -Append $env:GITHUB_ENV
 
       - name: CRD Setup
@@ -230,21 +207,82 @@ jobs:
           if ($runtime -lt 6 -and "${{ inputs.quick_test }}" -ne "true") { $runtime = 355 }
           "RUNTIME_MINUTES=$runtime" | Out-File -Append $env:GITHUB_ENV
 
-      - name: Install Tailscale
+      - name: Install Tailscale (FIXED - PAKE WINGET)
         run: |
+          Write-Host "🔥 INSTALLING TAILSCALE PAKE WINGET 🔥"
+          
+          # Cek apakah Tailscale udah terinstall
+          $ts = "$env:ProgramFiles\Tailscale\tailscale.exe"
+          if (Test-Path $ts) {
+            Write-Host "✅ Tailscale already installed!"
+          } else {
+            Write-Host "Installing Tailscale via winget..."
+            
+            # Method 1: Pake winget (paling reliable di GitHub Actions)
+            try {
+              winget install --id Tailscale.Tailscale -e --silent --accept-package-agreements --accept-source-agreements
+              Write-Host "✅ Tailscale installed via winget!"
+            } catch {
+              Write-Host "Winget failed, trying MSI..."
+              
+              # Method 2: MSI dengan timeout
+              $url = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
+              $dst = "$env:TEMP\tailscale.msi"
+              
+              # Download dengan timeout
+              $webClient = New-Object System.Net.WebClient
+              $webClient.DownloadFile($url, $dst)
+              
+              # Install dengan timeout 60 detik
+              $process = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$dst`" /quiet /norestart" -Wait -PassThru -NoNewWindow
+              if ($process.ExitCode -eq 0) {
+                Write-Host "✅ Tailscale installed via MSI!"
+              } else {
+                Write-Host "⚠️ MSI exit code: $($process.ExitCode)"
+              }
+              Remove-Item $dst -Force -ErrorAction SilentlyContinue
+            }
+          }
+          
+          # Tunggu sebentar biar installasi selesai
+          Start-Sleep -Seconds 5
+          
+          # Cek lagi path Tailscale
           $ts = "$env:ProgramFiles\Tailscale\tailscale.exe"
           if (-not (Test-Path $ts)) {
-            $url = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
-            $dst = "$env:TEMP\tailscale.msi"
-            Invoke-WebRequest -Uri $url -OutFile $dst
-            Start-Process msiexec.exe -ArgumentList "/i","`"$dst`"","/quiet","/norestart" -Wait
-            Remove-Item $dst -Force
+            Write-Host "⚠️ Tailscale not found, trying alternative path..."
+            $ts = "${env:ProgramFiles(x86)}\Tailscale\tailscale.exe"
           }
-          & $ts logout 2>$null
-          & $ts up --authkey "${{ inputs.ts_authkey }}" --hostname "$env:TS_HOSTNAME" --accept-dns=true --accept-routes=true
-          $ip4 = & $ts ip -4 | Select-Object -First 1
-          "TAILSCALE_IP=$ip4" | Out-File -Append $env:GITHUB_ENV
-          Write-Host "✅ Tailscale IP: $ip4"
+          
+          if (Test-Path $ts) {
+            Write-Host "✅ Tailscale found at: $ts"
+            
+            # Logout dulu
+            & $ts logout 2>$null
+            Start-Sleep -Seconds 2
+            
+            # Up Tailscale
+            Write-Host "Starting Tailscale up..."
+            & $ts up --authkey "${{ inputs.ts_authkey }}" --hostname "$env:TS_HOSTNAME" --accept-dns=true --accept-routes=true
+            
+            # Get IP
+            $ip4 = & $ts ip -4 | Select-Object -First 1
+            if ($ip4) {
+              "TAILSCALE_IP=$ip4" | Out-File -Append $env:GITHUB_ENV
+              Write-Host "✅ Tailscale IP: $ip4"
+            } else {
+              Write-Host "⚠️ No IP found, waiting..."
+              Start-Sleep -Seconds 10
+              $ip4 = & $ts ip -4 | Select-Object -First 1
+              if ($ip4) {
+                "TAILSCALE_IP=$ip4" | Out-File -Append $env:GITHUB_ENV
+                Write-Host "✅ Tailscale IP: $ip4"
+              }
+            }
+          } else {
+            Write-Host "❌ Tailscale installation failed!"
+            exit 1
+          }
 
       - name: Enable RDP + Firewall
         run: |
@@ -262,72 +300,48 @@ jobs:
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member $u -EA SilentlyContinue
           
           # Firewall rules
-          New-NetFirewallRule -DisplayName "RDP-3389" -Direction Inbound -Protocol TCP -LocalPort 3389 -Action Allow -ErrorAction SilentlyContinue
-          New-NetFirewallRule -DisplayName "RustDesk-TCP" -Direction Inbound -Protocol TCP -LocalPort 21115-21119 -Action Allow -ErrorAction SilentlyContinue
-          New-NetFirewallRule -DisplayName "RustDesk-UDP" -Direction Inbound -Protocol UDP -LocalPort 21116 -Action Allow -ErrorAction SilentlyContinue
+          netsh advfirewall firewall add rule name="RDP-3389" dir=in action=allow protocol=TCP localport=3389 2>$null
+          netsh advfirewall firewall add rule name="RustDesk-TCP" dir=in action=allow protocol=TCP localport=21115-21119 2>$null
+          netsh advfirewall firewall add rule name="RustDesk-UDP" dir=in action=allow protocol=UDP localport=21116 2>$null
           
           Write-Host "✅ RDP & RUSTDESK PORTS OPEN"
 
-      - name: ULTIMATE KEEPALIVE (RUN FOREVER)
+      - name: ULTIMATE KEEPALIVE (SIMPLE & RELIABLE)
         run: |
-          # MULTI-LAYER KEEPALIVE
+          Write-Host "🔥 ACTIVATING KEEPALIVE 🔥"
           
-          # Layer 1: PowerShell
-          $ps1 = @'
+          # Buat script keepalive sederhana
+          $keepalive = @'
           while ($true) {
-            Write-Host "💀 KEEPALIVE: $(Get-Date) - STREAMING AKTIF!"
-            Start-Sleep -Seconds 10
+            Start-Sleep -Seconds 15
           }
           '@
-          Set-Content -Path "$env:TEMP\keepalive1.ps1" -Value $ps1 -Encoding UTF8
-          Start-Process powershell -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$env:TEMP\keepalive1.ps1`"" -WindowStyle Hidden
           
-          # Layer 2: VBS
+          # Simpan ke file
+          $keepalivePath = "$env:TEMP\keepalive.ps1"
+          Set-Content -Path $keepalivePath -Value $keepalive -Encoding UTF8
+          
+          # Jalankan di background pake Start-Job (lebih reliable)
+          Start-Job -ScriptBlock {
+            while ($true) {
+              Start-Sleep -Seconds 15
+            }
+          } -Name "KeepaliveJob"
+          
+          # Juga jalankan pake Start-Process
+          Start-Process powershell -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$keepalivePath`"" -WindowStyle Hidden
+          
+          # Buat VBS keepalive juga
           $vbs = @'
           Do While True
-            WScript.Sleep 10000
+            WScript.Sleep 15000
           Loop
           '@
-          Set-Content -Path "$env:TEMP\keepalive2.vbs" -Value $vbs -Encoding UTF8
-          Start-Process wscript -ArgumentList "$env:TEMP\keepalive2.vbs" -WindowStyle Hidden
+          $vbsPath = "$env:TEMP\keepalive.vbs"
+          Set-Content -Path $vbsPath -Value $vbs -Encoding UTF8
+          Start-Process wscript -ArgumentList "$vbsPath" -WindowStyle Hidden
           
-          # Layer 3: CMD
-          $cmd = @'
-          @echo off
-          :loop
-          echo KEEPALIVE - STREAMING ACTIVE
-          timeout /t 10 /nobreak >nul
-          goto loop
-          '@
-          Set-Content -Path "$env:TEMP\keepalive3.cmd" -Value $cmd -Encoding ASCII
-          Start-Process cmd -ArgumentList "/c start /min `"$env:TEMP\keepalive3.cmd`"" -WindowStyle Hidden
-          
-          # Layer 4: Scheduled Task
-          $taskXml = @'
-          <?xml version="1.0" encoding="UTF-16"?>
-          <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-            <Triggers>
-              <BootTrigger><Enabled>true</Enabled></BootTrigger>
-              <SessionStateChangeTrigger><Enabled>true</Enabled><StateChange>SessionUnlock</StateChange></SessionStateChangeTrigger>
-              <TimeTrigger><Enabled>true</Enabled><StartBoundary>2024-01-01T00:00:00</StartBoundary><Repetition><Interval>PT1M</Interval><Duration>PT0S</Duration></Repetition></TimeTrigger>
-            </Triggers>
-            <Settings>
-              <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-              <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-              <WakeToRun>true</WakeToRun>
-              <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
-              <Priority>4</Priority>
-            </Settings>
-            <Actions Context="Author">
-              <Exec><Command>powershell.exe</Command><Arguments>-WindowStyle Hidden -ExecutionPolicy Bypass -Command "while($true){Start-Sleep 30}"</Arguments></Exec>
-            </Actions>
-          </Task>
-          '@
-          $taskXml | Out-File -FilePath "$env:TEMP\keepalive_task.xml" -Encoding UTF8
-          schtasks /create /tn "StreamingKeepalive" /xml "$env:TEMP\keepalive_task.xml" /f 2>$null
-          schtasks /run /tn "StreamingKeepalive" 2>$null
-          
-          Write-Host "✅ 4 LAYERS KEEPALIVE ACTIVATED!"
+          Write-Host "✅ KEEPALIVE ACTIVATED (3 LAYERS)!"
 
       - name: Display Connection Info
         run: |
@@ -347,12 +361,31 @@ jobs:
           Write-Host "█                                                              █"
           Write-Host "████████████████████████████████████████████████████████████████"
 
+      - name: Screenshot
+        run: |
+          Add-Type -AssemblyName "System.Windows.Forms","System.Drawing"
+          $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+          $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+          $ss = "$env:TEMP\ss_${{ matrix.id }}.png"
+          $bitmap.Save($ss, [System.Drawing.Imaging.ImageFormat]::Png)
+          $graphics.Dispose(); $bitmap.Dispose()
+          try {
+            $result = curl.exe -s -F "file=@$ss" https://store1.gofile.io/uploadFile
+            $json = $result | ConvertFrom-Json
+            if ($json.status -eq "ok") { 
+              "SCREENSHOT_URL=$($json.data.downloadPage)" | Out-File -Append $env:GITHUB_ENV
+              Write-Host "📸 Screenshot: $($json.data.downloadPage)"
+            }
+          } catch { Write-Host "Screenshot upload skipped" }
+
       - name: ULTIMATE STREAMING KEEPALIVE
         run: |
           $mins = [int]"$env:RUNTIME_MINUTES"
           $end = (Get-Date).AddMinutes($mins)
           while ((Get-Date) -lt $end) {
-            Write-Host "💀 $(Get-Date) | STREAMING AKTIF! RUSTDESK ID: $env:RUSTDESK_ID"
+            Write-Host "💀 $(Get-Date) | STREAMING AKTIF! RUSTDESK ID: $env:RUSTDESK_ID | SS: $env:SCREENSHOT_URL"
             Start-Sleep -Seconds 30
           }
 
