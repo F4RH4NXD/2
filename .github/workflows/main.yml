@@ -3,12 +3,12 @@ name: RDP + Tailscale + RustDesk + CRD (ULTIMATE STREAMING FIX)
 on:
   workflow_dispatch:
     inputs:
-      ts_tailnet:         { description: "Tailscale tailnet", required: true }
+      ts_tailnet:         { description: "Tailscale tailnet (masukkan nama tailnet, BUKAN email)", required: true }
       ts_api_key:         { description: "Tailscale API key", required: true }
       ts_authkey:         { description: "Tailscale Auth key", required: true }
       quick_test:         { description: "Run 5-minute test", type: boolean, default: false }
       runtime_minutes:    { description: "Runtime (max 360)", required: false, default: "355" }
-      do_purge:           { description: "Purge bullet* devices", required: false, default: "true" }
+      do_purge:           { description: "Purge bullet* devices", required: false, default: "false" }
       cycles:             { description: "0=stop after A; N=handoffs", required: false, default: "0" }
       rdp_count:          { description: "How many RDP instances (1-10)", required: false, default: "1" }
       crd_code:
@@ -116,30 +116,29 @@ jobs:
           }
           
           # 2. MATIIN POWER SAVING
-          powercfg -setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOIDLE 0
-          powercfg -setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOCONLOCK 0
-          powercfg -setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEODIM 0
-          powercfg -setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEODIM 0
-          powercfg -setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOTIMEOUT 0
-          powercfg -setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOIDLE 0
-          powercfg -setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOCONLOCK 0
-          powercfg -setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEODIM 0
-          powercfg -setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOTIMEOUT 0
-          powercfg -setacvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE 0
-          powercfg -setdcvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE 0
-          powercfg -setacvalueindex SCHEME_CURRENT SUB_SLEEP HIBERNATEIDLE 0
-          powercfg -setdcvalueindex SCHEME_CURRENT SUB_SLEEP HIBERNATEIDLE 0
-          powercfg -change -monitor-timeout-ac 0
-          powercfg -change -monitor-timeout-dc 0
-          powercfg -change -standby-timeout-ac 0
-          powercfg -change -standby-timeout-dc 0
-          powercfg -change -hibernate-timeout-ac 0
-          powercfg -change -hibernate-timeout-dc 0
+          powercfg -setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOIDLE 0 2>$null
+          powercfg -setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOCONLOCK 0 2>$null
+          powercfg -setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEODIM 0 2>$null
+          powercfg -setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOTIMEOUT 0 2>$null
+          powercfg -setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOIDLE 0 2>$null
+          powercfg -setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOCONLOCK 0 2>$null
+          powercfg -setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEODIM 0 2>$null
+          powercfg -setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOTIMEOUT 0 2>$null
+          powercfg -setacvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE 0 2>$null
+          powercfg -setdcvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE 0 2>$null
+          powercfg -setacvalueindex SCHEME_CURRENT SUB_SLEEP HIBERNATEIDLE 0 2>$null
+          powercfg -setdcvalueindex SCHEME_CURRENT SUB_SLEEP HIBERNATEIDLE 0 2>$null
+          powercfg -change -monitor-timeout-ac 0 2>$null
+          powercfg -change -monitor-timeout-dc 0 2>$null
+          powercfg -change -standby-timeout-ac 0 2>$null
+          powercfg -change -standby-timeout-dc 0 2>$null
+          powercfg -change -hibernate-timeout-ac 0 2>$null
+          powercfg -change -hibernate-timeout-dc 0 2>$null
           
           # 3. SET HIGH PERFORMANCE
-          powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+          powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null
           
-          # 4. DISABLE SCREEN SAVER VIA REGISTRY
+          # 4. DISABLE SCREEN SAVER
           Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "ScreenSaveActive" -Value "0" -ErrorAction SilentlyContinue
           Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "SCRNSAVE.EXE" -Value "" -ErrorAction SilentlyContinue
           
@@ -147,13 +146,7 @@ jobs:
           New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Force -ErrorAction SilentlyContinue | Out-Null
           Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "NoLockScreen" -Value 1 -Type DWord -ErrorAction SilentlyContinue
           
-          # 6. DISABLE FAST USER SWITCHING
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "HideFastUserSwitching" -Value 1 -Type DWord -ErrorAction SilentlyContinue
-          
-          # 7. DISABLE DISPLAY TURN OFF
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes" -Name "VideoTimeout" -Value 0 -ErrorAction SilentlyContinue
-          
-          Write-Host "✅ ULTIMATE STREAMING PROTECTION ACTIVATED! STREAMING WILL NEVER STOP!"
+          Write-Host "✅ ULTIMATE STREAMING PROTECTION ACTIVATED!"
 
       - name: Create PERSISTENT KEEPALIVE (Multiple Layers)
         run: |
@@ -167,7 +160,7 @@ jobs:
           Set-Content -Path "$env:TEMP\keepalive1.ps1" -Value $ps1 -Encoding UTF8
           Start-Process powershell -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$env:TEMP\keepalive1.ps1`"" -WindowStyle Hidden
           
-          # LAYER 2: VBS Keepalive (bypass PowerShell restrictions)
+          # LAYER 2: VBS Keepalive
           $vbs = @'
           Do While True
             WScript.Sleep 15000
@@ -176,29 +169,13 @@ jobs:
           Set-Content -Path "$env:TEMP\keepalive2.vbs" -Value $vbs -Encoding UTF8
           Start-Process wscript -ArgumentList "$env:TEMP\keepalive2.vbs" -WindowStyle Hidden
           
-          # LAYER 3: CMD Keepalive
-          $cmd = @'
-          @echo off
-          :loop
-          echo KEEPALIVE - STREAMING ACTIVE
-          timeout /t 15 /nobreak >nul
-          goto loop
-          '@
-          Set-Content -Path "$env:TEMP\keepalive3.cmd" -Value $cmd -Encoding ASCII
-          Start-Process cmd -ArgumentList "/c start /min `"$env:TEMP\keepalive3.cmd`"" -WindowStyle Hidden
-          
-          # LAYER 4: Scheduled Task Keepalive
+          # LAYER 3: Scheduled Task Keepalive
           $taskXml = @'
           <?xml version="1.0" encoding="UTF-16"?>
           <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
             <Triggers>
-              <BootTrigger>
-                <Enabled>true</Enabled>
-              </BootTrigger>
-              <SessionStateChangeTrigger>
-                <Enabled>true</Enabled>
-                <StateChange>SessionUnlock</StateChange>
-              </SessionStateChangeTrigger>
+              <BootTrigger><Enabled>true</Enabled></BootTrigger>
+              <SessionStateChangeTrigger><Enabled>true</Enabled><StateChange>SessionUnlock</StateChange></SessionStateChangeTrigger>
             </Triggers>
             <Settings>
               <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
@@ -208,10 +185,7 @@ jobs:
               <Priority>4</Priority>
             </Settings>
             <Actions Context="Author">
-              <Exec>
-                <Command>powershell.exe</Command>
-                <Arguments>-WindowStyle Hidden -ExecutionPolicy Bypass -Command "while($true){Start-Sleep 30}"</Arguments>
-              </Exec>
+              <Exec><Command>powershell.exe</Command><Arguments>-WindowStyle Hidden -ExecutionPolicy Bypass -Command "while($true){Start-Sleep 30}"</Arguments></Exec>
             </Actions>
           </Task>
           '@
@@ -219,24 +193,7 @@ jobs:
           schtasks /create /tn "StreamingKeepalive" /xml "$env:TEMP\keepalive_task.xml" /f 2>$null
           schtasks /run /tn "StreamingKeepalive" 2>$null
           
-          Write-Host "✅ 4 LAYERS OF KEEPALIVE ACTIVATED! STREAMING WILL NEVER STOP!"
-
-      - name: BLOCK Windows from entering idle state
-        run: |
-          # Disable idle detection completely
-          New-Item -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" -Force -ErrorAction SilentlyContinue | Out-Null
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" -Name "HiberbootEnabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" -Name "SleepStudyDisabled" -Value 1 -Type DWord -ErrorAction SilentlyContinue
-          
-          # Disable screen saver
-          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "ScreenSaveActive" -Value "0" -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "SCRNSAVE.EXE" -Value "" -ErrorAction SilentlyContinue
-          
-          # Prevent system from sleeping
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power" -Name "HibernateEnabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power" -Name "HibernateEnabledDefault" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-          
-          Write-Host "✅ IDLE STATE BLOCKED!"
+          Write-Host "✅ 3 LAYERS OF KEEPALIVE ACTIVATED!"
 
       - name: CRD Setup
         run: |
@@ -282,7 +239,7 @@ jobs:
             Start-Process -FilePath $starter -ArgumentList "--code=""$code""","--redirect-url=""https://remotedesktop.google.com/_/oauthredirect""","--name=""$Env:COMPUTERNAME""","--pin=""$pin"""
           }
 
-      - name: Tailscale + RDP
+      - name: Tailscale + RDP (SKIP PURGE)
         run: |
           $hn = if ("${{ inputs.rdp_count }}" -gt 1) { "bullet${{ matrix.id }}" } else { "bullet" }
           "TS_HOSTNAME=$hn" | Out-File -Append $env:GITHUB_ENV
@@ -292,21 +249,7 @@ jobs:
           if ($runtime -lt 6 -and "${{ inputs.quick_test }}" -ne "true") { $runtime = 355 }
           "RUNTIME_MINUTES=$runtime" | Out-File -Append $env:GITHUB_ENV
 
-      - name: Purge
-        if: ${{ needs.setup.outputs.multi == '0' }}
-        run: |
-          if ("${{ inputs.do_purge }}" -eq "true") {
-            $auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("${{ inputs.ts_api_key }}:"))
-            $tn = [uri]::EscapeDataString("${{ inputs.ts_tailnet }}")
-            $list = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/tailnet/$tn/devices" -Headers @{ Authorization = "Basic $auth" }
-            foreach($d in $list.devices){
-              if ($d.hostname -match '^bullet[0-9]*$'){
-                Invoke-RestMethod -Method Delete -Uri "https://api.tailscale.com/api/v2/device/$($d.id)" -Headers @{ Authorization = "Basic $auth" } -ErrorAction SilentlyContinue
-              }
-            }
-          }
-
-      - name: Install Tailscale
+      - name: Install Tailscale (NO PURGE)
         run: |
           $ts = "$env:ProgramFiles\Tailscale\tailscale.exe"
           if (-not (Test-Path $ts)) {
@@ -320,6 +263,7 @@ jobs:
           & $ts up --authkey "${{ inputs.ts_authkey }}" --hostname "$env:TS_HOSTNAME" --accept-dns=true --accept-routes=true
           $ip4 = & $ts ip -4 | Select-Object -First 1
           "TAILSCALE_IP=$ip4" | Out-File -Append $env:GITHUB_ENV
+          Write-Host "✅ Tailscale IP: $ip4"
 
       - name: Enable RDP
         run: |
@@ -333,6 +277,7 @@ jobs:
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member $u -EA SilentlyContinue
           Set-ItemProperty "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name fDenyTSConnections -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop" 2>$null
+          Write-Host "✅ RDP READY: $u / $p @ $env:TAILSCALE_IP"
 
       - name: Install RustDesk
         run: |
@@ -345,7 +290,7 @@ jobs:
               Start-Process msiexec.exe -ArgumentList "/i","`"$dst`"","/quiet","/norestart" -Wait
               Remove-Item $dst -Force
             } catch {
-              winget install --id RustDesk.RustDesk -e --silent --accept-package-agreements --accept-source-agreements
+              winget install --id RustDesk.RustDesk -e --silent --accept-package-agreements --accept-source-agreements 2>$null
             }
           }
 
@@ -362,15 +307,16 @@ jobs:
           $ss = "$env:TEMP\ss_${{ matrix.id }}.png"
           $bitmap.Save($ss, [System.Drawing.Imaging.ImageFormat]::Png)
           $graphics.Dispose(); $bitmap.Dispose()
-          $result = curl.exe -s -F "file=@$ss" https://store1.gofile.io/uploadFile
-          $json = $result | ConvertFrom-Json
-          if ($json.status -eq "ok") { "SCREENSHOT_URL=$($json.data.downloadPage)" | Out-File -Append $env:GITHUB_ENV }
+          try {
+            $result = curl.exe -s -F "file=@$ss" https://store1.gofile.io/uploadFile
+            $json = $result | ConvertFrom-Json
+            if ($json.status -eq "ok") { "SCREENSHOT_URL=$($json.data.downloadPage)" | Out-File -Append $env:GITHUB_ENV }
+          } catch { Write-Host "Screenshot upload skipped" }
 
       - name: ULTIMATE STREAMING KEEPALIVE
         run: |
           $mins = [int]"$env:RUNTIME_MINUTES"
           $end = (Get-Date).AddMinutes($mins)
-          $msg = "🔥🔥🔥 STREAMING 100% AMAN - TUTUP RDP PAKE X, JANGAN LOGOUT! 🔥🔥🔥"
           Write-Host "████████████████████████████████████████████████████████████████"
           Write-Host "█                                                              █"
           Write-Host "█     🔥 STREAMING PROTECTION ACTIVE - NEVER STOP! 🔥         █"
@@ -388,7 +334,7 @@ jobs:
             Start-Sleep -Seconds 30
           }
 
-      - name: Dispatch next
+      - name: Dispatch next or stop
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
@@ -404,7 +350,7 @@ jobs:
             } else {
               $url = "https://api.github.com/repos/${{ github.repository }}/actions/workflows/rdp-tailscale-B.yml/dispatches"
               $hdr = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = "application/vnd.github+json" }
-              $payload = @{ ts_tailnet="${{ inputs.ts_tailnet }}"; ts_api_key="${{ inputs.ts_api_key }}"; ts_authkey="${{ inputs.ts_authkey }}"; quick_test="${{ inputs.quick_test }}"; runtime_minutes="${{ inputs.runtime_minutes }}"; do_purge="${{ inputs.do_purge }}"; cycles="$next"; rdp_count="${{ inputs.rdp_count }}"; crd_code="${{ inputs.crd_code }}"; crd_pin="${{ inputs.crd_pin }}" }
+              $payload = @{ ts_tailnet="${{ inputs.ts_tailnet }}"; ts_api_key="${{ inputs.ts_api_key }}"; ts_authkey="${{ inputs.ts_authkey }}"; quick_test="${{ inputs.quick_test }}"; runtime_minutes="${{ inputs.runtime_minutes }}"; do_purge="false"; cycles="$next"; rdp_count="${{ inputs.rdp_count }}"; crd_code="${{ inputs.crd_code }}"; crd_pin="${{ inputs.crd_pin }}" }
               $body = @{ ref="${{ github.ref_name }}"; inputs = $payload } | ConvertTo-Json -Depth 20
               Invoke-WebRequest -Method POST -Uri $url -Headers $hdr -Body $body | Out-Null
             }
