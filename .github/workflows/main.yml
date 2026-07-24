@@ -1,9 +1,9 @@
-name: RDP + Tailscale + RustDesk + CRD (ULTIMATE STREAMING FIX)
+name: RDP + Tailscale + RustDesk + CRD (FIX RECONNECT)
 
 on:
   workflow_dispatch:
     inputs:
-      ts_tailnet:         { description: "Tailscale tailnet (masukkan nama tailnet, BUKAN email)", required: true }
+      ts_tailnet:         { description: "Tailscale tailnet", required: true }
       ts_api_key:         { description: "Tailscale API key", required: true }
       ts_authkey:         { description: "Tailscale Auth key", required: true }
       quick_test:         { description: "Run 5-minute test", type: boolean, default: false }
@@ -61,139 +61,78 @@ jobs:
       RDP_PASS: Bullet@12345
 
     steps:
-      # ============ ULTIMATE STREAMING PROTECTION ============
-      - name: GUARANTEE STREAMING NEVER STOPS
+      # ============ FIX: KEEP SESSION ACTIVE ============
+      - name: FIX SESSION - BIAR GA DISCONNECT
         run: |
-          Write-Host "🔥🔥🔥 ACTIVATING ULTIMATE STREAMING PROTECTION 🔥🔥🔥"
+          Write-Host "🔥 FIXING RDP/RUSTDESK SESSION RECONNECT ISSUE 🔥"
           
-          # 1. MATIIN SEMUA TIMEOUT
-          $settings = @{
-            "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" = @{
-              "fResetBrokenOnTimeout" = 0
-              "fDenyTSConnections" = 0
-              "fSingleSessionPerUser" = 0
-              "AllowRemoteRPC" = 1
-              "fAllowToGetHelp" = 1
-            }
-            "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" = @{
-              "MaxDisconnectionTime" = 0
-              "MaxConnectionTime" = 0
-              "MaxIdleTime" = 0
-              "UserTimeout" = 0
-              "fDisableAutoReconnect" = 1
-              "fInheritMaxSessionTime" = 0
-              "fInheritMaxDisconnectionTime" = 0
-              "fInheritMaxIdleTime" = 0
-            }
-            "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" = @{
-              "fResetBrokenOnTimeout" = 0
-              "MaxDisconnectionTime" = 0
-              "MaxConnectionTime" = 0
-              "MaxIdleTime" = 0
-              "fAllowUnsolicited" = 1
-            }
-            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" = @{
-              "InactivityTimeoutSecs" = 0
-              "PromptOnSecureDesktop" = 0
-              "DontDisplayLockScreen" = 1
-              "DisableLockScreen" = 1
-            }
-            "HKCU:\Control Panel\Desktop" = @{
-              "ScreenSaveActive" = "0"
-              "SCRNSAVE.EXE" = ""
-              "ScreenSaverIsSecure" = "0"
-              "ScreenSaveTimeOut" = "0"
-            }
-          }
+          # 1. Matiin semua timeout (udah ada tapi tambahin)
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fResetBrokenOnTimeout" -Value 0 -Force -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "MaxDisconnectionTime" -Value 0 -Force -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "MaxIdleTime" -Value 0 -Force -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "UserTimeout" -Value 0 -Force -ErrorAction SilentlyContinue
           
-          foreach ($path in $settings.Keys) {
-            New-Item -Path $path -Force -ErrorAction SilentlyContinue | Out-Null
-            foreach ($key in $settings[$path].Keys) {
-              $value = $settings[$path][$key]
-              $type = if ($value -is [int]) { "DWord" } else { "String" }
-              Set-ItemProperty -Path $path -Name $key -Value $value -Type $type -ErrorAction SilentlyContinue
-            }
-          }
+          # 2. BIARIN SESSION TETAP AKTIF WALAU RDP DITUTUP
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fSingleSessionPerUser" -Value 0 -Force -ErrorAction SilentlyContinue
           
-          # 2. MATIIN POWER SAVING
-          powercfg -setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOIDLE 0 2>$null
-          powercfg -setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOCONLOCK 0 2>$null
-          powercfg -setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEODIM 0 2>$null
-          powercfg -setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOTIMEOUT 0 2>$null
-          powercfg -setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOIDLE 0 2>$null
-          powercfg -setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOCONLOCK 0 2>$null
-          powercfg -setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEODIM 0 2>$null
-          powercfg -setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOTIMEOUT 0 2>$null
-          powercfg -setacvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE 0 2>$null
-          powercfg -setdcvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE 0 2>$null
-          powercfg -setacvalueindex SCHEME_CURRENT SUB_SLEEP HIBERNATEIDLE 0 2>$null
-          powercfg -setdcvalueindex SCHEME_CURRENT SUB_SLEEP HIBERNATEIDLE 0 2>$null
-          powercfg -change -monitor-timeout-ac 0 2>$null
-          powercfg -change -monitor-timeout-dc 0 2>$null
-          powercfg -change -standby-timeout-ac 0 2>$null
-          powercfg -change -standby-timeout-dc 0 2>$null
-          powercfg -change -hibernate-timeout-ac 0 2>$null
-          powercfg -change -hibernate-timeout-dc 0 2>$null
+          # 3. MATIIN AUTOMATIC DISCONNECT SAAT RDP TUTUP
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fAllowRemoteRPC" -Value 1 -Force -ErrorAction SilentlyContinue
           
-          # 3. SET HIGH PERFORMANCE
-          powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null
+          # 4. SET SESSION CONSOLE TETAP AKTIF
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "fDisableAutoReconnect" -Value 0 -Force -ErrorAction SilentlyContinue
           
-          # 4. DISABLE SCREEN SAVER
-          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "ScreenSaveActive" -Value "0" -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "SCRNSAVE.EXE" -Value "" -ErrorAction SilentlyContinue
-          
-          # 5. DISABLE WINDOWS LOCK SCREEN
-          New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Force -ErrorAction SilentlyContinue | Out-Null
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "NoLockScreen" -Value 1 -Type DWord -ErrorAction SilentlyContinue
-          
-          Write-Host "✅ ULTIMATE STREAMING PROTECTION ACTIVATED!"
+          Write-Host "✅ SESSION FIX APPLIED!"
 
-      - name: Create PERSISTENT KEEPALIVE (Multiple Layers)
+      - name: SET RDP TO CONSOLE MODE - BIAR REKONEK
         run: |
-          # LAYER 1: PowerShell Keepalive
-          $ps1 = @'
+          Write-Host "🔥 SETTING RDP TO CONSOLE MODE 🔥"
+          
+          # Ubah session jadi console biar gak disconnect
+          $session = (qwinsta | Select-String ">console" | ForEach-Object { ($_ -split '\s+')[2] }) -replace '[^0-9]', ''
+          if ($session) {
+            tscon $session /dest:console 2>$null
+            Write-Host "✅ Session moved to console: $session"
+          }
+          
+          # Biar session selalu di console
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "AllowRemoteRPC" -Value 1 -Force -ErrorAction SilentlyContinue
+          
+          Write-Host "✅ RDP CONSOLE MODE ENABLED!"
+
+      - name: KEEPALIVE + RUSTDESK AUTO-RECONNECT
+        run: |
+          Write-Host "🔥 ACTIVATING RUSTDESK AUTO-RECONNECT 🔥"
+          
+          # Buat script buat restart RustDesk kalo mati
+          $rustScript = @'
           while ($true) {
-            Write-Host "💀 KEEPALIVE: $(Get-Date) - STREAMING AKTIF!"
-            Start-Sleep -Seconds 15
+            $proc = Get-Process -Name "rustdesk" -ErrorAction SilentlyContinue
+            if (-not $proc) {
+              Write-Host "RustDesk mati! Restarting..."
+              Start-Process "C:\Program Files\RustDesk\rustdesk.exe"
+            }
+            Start-Sleep -Seconds 10
           }
           '@
-          Set-Content -Path "$env:TEMP\keepalive1.ps1" -Value $ps1 -Encoding UTF8
-          Start-Process powershell -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$env:TEMP\keepalive1.ps1`"" -WindowStyle Hidden
+          Set-Content -Path "$env:TEMP\rustkeepalive.ps1" -Value $rustScript -Encoding UTF8
+          Start-Process powershell -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$env:TEMP\rustkeepalive.ps1`"" -WindowStyle Hidden
           
-          # LAYER 2: VBS Keepalive
-          $vbs = @'
-          Do While True
-            WScript.Sleep 15000
-          Loop
+          # Buat script buat reconnect RDP session
+          $rdpScript = @'
+          while ($true) {
+            $session = qwinsta | Select-String "disc"
+            if ($session) {
+              Write-Host "Found disconnected session! Reconnecting..."
+              $sid = ($session -split '\s+')[2] -replace '[^0-9]', ''
+              if ($sid) { tscon $sid /dest:console 2>$null }
+            }
+            Start-Sleep -Seconds 30
+          }
           '@
-          Set-Content -Path "$env:TEMP\keepalive2.vbs" -Value $vbs -Encoding UTF8
-          Start-Process wscript -ArgumentList "$env:TEMP\keepalive2.vbs" -WindowStyle Hidden
+          Set-Content -Path "$env:TEMP\rdpreconnect.ps1" -Value $rdpScript -Encoding UTF8
+          Start-Process powershell -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$env:TEMP\rdpreconnect.ps1`"" -WindowStyle Hidden
           
-          # LAYER 3: Scheduled Task Keepalive
-          $taskXml = @'
-          <?xml version="1.0" encoding="UTF-16"?>
-          <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-            <Triggers>
-              <BootTrigger><Enabled>true</Enabled></BootTrigger>
-              <SessionStateChangeTrigger><Enabled>true</Enabled><StateChange>SessionUnlock</StateChange></SessionStateChangeTrigger>
-            </Triggers>
-            <Settings>
-              <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-              <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-              <WakeToRun>true</WakeToRun>
-              <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
-              <Priority>4</Priority>
-            </Settings>
-            <Actions Context="Author">
-              <Exec><Command>powershell.exe</Command><Arguments>-WindowStyle Hidden -ExecutionPolicy Bypass -Command "while($true){Start-Sleep 30}"</Arguments></Exec>
-            </Actions>
-          </Task>
-          '@
-          $taskXml | Out-File -FilePath "$env:TEMP\keepalive_task.xml" -Encoding UTF8
-          schtasks /create /tn "StreamingKeepalive" /xml "$env:TEMP\keepalive_task.xml" /f 2>$null
-          schtasks /run /tn "StreamingKeepalive" 2>$null
-          
-          Write-Host "✅ 3 LAYERS OF KEEPALIVE ACTIVATED!"
+          Write-Host "✅ AUTO-RECONNECT ACTIVATED!"
 
       - name: CRD Setup
         run: |
@@ -239,7 +178,7 @@ jobs:
             Start-Process -FilePath $starter -ArgumentList "--code=""$code""","--redirect-url=""https://remotedesktop.google.com/_/oauthredirect""","--name=""$Env:COMPUTERNAME""","--pin=""$pin"""
           }
 
-      - name: Tailscale + RDP (SKIP PURGE)
+      - name: Tailscale + RDP
         run: |
           $hn = if ("${{ inputs.rdp_count }}" -gt 1) { "bullet${{ matrix.id }}" } else { "bullet" }
           "TS_HOSTNAME=$hn" | Out-File -Append $env:GITHUB_ENV
@@ -249,7 +188,7 @@ jobs:
           if ($runtime -lt 6 -and "${{ inputs.quick_test }}" -ne "true") { $runtime = 355 }
           "RUNTIME_MINUTES=$runtime" | Out-File -Append $env:GITHUB_ENV
 
-      - name: Install Tailscale (NO PURGE)
+      - name: Install Tailscale
         run: |
           $ts = "$env:ProgramFiles\Tailscale\tailscale.exe"
           if (-not (Test-Path $ts)) {
@@ -265,7 +204,7 @@ jobs:
           "TAILSCALE_IP=$ip4" | Out-File -Append $env:GITHUB_ENV
           Write-Host "✅ Tailscale IP: $ip4"
 
-      - name: Enable RDP
+      - name: Enable RDP + CONSOLE
         run: |
           $u=$env:RDP_USER; $p=$env:RDP_PASS
           $sec = ConvertTo-SecureString $p -AsPlainText -Force
@@ -277,9 +216,14 @@ jobs:
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member $u -EA SilentlyContinue
           Set-ItemProperty "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name fDenyTSConnections -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop" 2>$null
+          
+          # Set console session biar bisa reconnect
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "AllowRemoteRPC" -Value 1 -Force
+          
           Write-Host "✅ RDP READY: $u / $p @ $env:TAILSCALE_IP"
+          Write-Host "✅ CONSOLE MODE ENABLED - REKONEK BISA!"
 
-      - name: Install RustDesk
+      - name: Install RustDesk + SET PASSWORD
         run: |
           $rdExe = "C:\Program Files\RustDesk\rustdesk.exe"
           if (-not (Test-Path $rdExe)) {
@@ -293,12 +237,27 @@ jobs:
               winget install --id RustDesk.RustDesk -e --silent --accept-package-agreements --accept-source-agreements 2>$null
             }
           }
+          
+          # Set RustDesk password biar auto login
+          $rdConfig = "$env:APPDATA\RustDesk\config\RustDesk.toml"
+          New-Item -Path "$env:APPDATA\RustDesk\config" -ItemType Directory -Force -ErrorAction SilentlyContinue
+          @"
+[options]
+password = "Bullet@12345"
+password-check = true
+allow-only-one-instance = false
+"@ | Out-File -FilePath $rdConfig -Encoding UTF8 -Force
 
-      - name: Launch + Screenshot
+      - name: Launch RustDesk + Screenshot
         run: |
           $rdExe = "C:\Program Files\RustDesk\rustdesk.exe"
-          if (Test-Path $rdExe) { Start-Process $rdExe -ErrorAction SilentlyContinue }
-          Start-Sleep -Seconds 5
+          if (Test-Path $rdExe) { 
+            Start-Process $rdExe -ErrorAction SilentlyContinue
+            Write-Host "✅ RustDesk launched!"
+          }
+          Start-Sleep -Seconds 10
+          
+          # Screenshot
           Add-Type -AssemblyName "System.Windows.Forms","System.Drawing"
           $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
           $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
@@ -307,30 +266,50 @@ jobs:
           $ss = "$env:TEMP\ss_${{ matrix.id }}.png"
           $bitmap.Save($ss, [System.Drawing.Imaging.ImageFormat]::Png)
           $graphics.Dispose(); $bitmap.Dispose()
+          
           try {
             $result = curl.exe -s -F "file=@$ss" https://store1.gofile.io/uploadFile
             $json = $result | ConvertFrom-Json
             if ($json.status -eq "ok") { "SCREENSHOT_URL=$($json.data.downloadPage)" | Out-File -Append $env:GITHUB_ENV }
           } catch { Write-Host "Screenshot upload skipped" }
 
-      - name: ULTIMATE STREAMING KEEPALIVE
+      - name: ULTIMATE SESSION KEEPALIVE
         run: |
           $mins = [int]"$env:RUNTIME_MINUTES"
           $end = (Get-Date).AddMinutes($mins)
+          
           Write-Host "████████████████████████████████████████████████████████████████"
           Write-Host "█                                                              █"
-          Write-Host "█     🔥 STREAMING PROTECTION ACTIVE - NEVER STOP! 🔥         █"
+          Write-Host "█     🔥 SESSION AMAN - REKONEK BISA! 🔥                      █"
           Write-Host "█                                                              █"
-          Write-Host "█     💀 TUTUP RDP PAKE TOMBOL X - JANGAN LOGOUT! 💀          █"
+          Write-Host "█     💀 TUTUP RDP/RUSTDESK PAKE TOMBOL X! 💀                 █"
+          Write-Host "█     💀 REKONEK LAGI PAKE RUSTDESK ATAU RDP 💀              █"
           Write-Host "█                                                              █"
-          Write-Host "█     📡 TAILSCALE IP: $env:TAILSCALE_IP                  █"
+          Write-Host "█     📡 TAILSCALE IP: $env:TAILSCALE_IP                 █"
           Write-Host "█     👤 USER: $env:RDP_USER / PASS: $env:RDP_PASS █"
           Write-Host "█     📸 SCREENSHOT: $env:SCREENSHOT_URL █"
           Write-Host "█                                                              █"
           Write-Host "████████████████████████████████████████████████████████████████"
           
           while ((Get-Date) -lt $end) {
-            Write-Host "💀 $(Get-Date) | STREAMING AKTIF! | SS: $env:SCREENSHOT_URL"
+            # Cek disconnected session dan reconnect
+            $disc = qwinsta | Select-String "disc"
+            if ($disc) {
+              $sid = ($disc -split '\s+')[2] -replace '[^0-9]', ''
+              if ($sid) { 
+                tscon $sid /dest:console 2>$null
+                Write-Host "✅ Reconnected session: $sid"
+              }
+            }
+            
+            # Cek RustDesk masih jalan
+            $proc = Get-Process -Name "rustdesk" -ErrorAction SilentlyContinue
+            if (-not $proc) {
+              Start-Process "C:\Program Files\RustDesk\rustdesk.exe" -ErrorAction SilentlyContinue
+              Write-Host "✅ RustDesk restarted!"
+            }
+            
+            Write-Host "💀 $(Get-Date) | SESSION AKTIF! | SS: $env:SCREENSHOT_URL"
             Start-Sleep -Seconds 30
           }
 
